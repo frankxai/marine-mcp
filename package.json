@@ -1,0 +1,42 @@
+{
+  "name": "marine-mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for the Ocean Intelligence System. Serves the Blue Life Commons corpus to AI agents — review-gated, source-attributed.",
+  "type": "module",
+  "bin": {
+    "marine-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "node --import tsx src/index.ts",
+    "test": "node --import tsx --test test/corpus.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ocean",
+    "marine",
+    "blue-life-commons",
+    "conservation"
+  ],
+  "author": "frankxai",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.0",
+    "yaml": "^2.5.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
