@@ -247,6 +247,165 @@ server.registerTool(
   },
 );
 
+/* ---- Sustainable Practices (BLC content/practices/) ---- */
+server.registerTool(
+  "get_practice_guide",
+  {
+    title: "Get sustainable practice guide",
+    description:
+      "Retrieve a reviewed sustainable ocean practice guide from the commons (coral gardening, kelp restoration, seagrass regeneration, mangrove restoration, sustainable aquaculture, MPAs, ocean plastic removal, blue carbon, artificial reef design). Review-gated.",
+    inputSchema: {
+      practice_id: z
+        .string()
+        .describe("Artifact id, e.g. 'coral-gardening' or 'kelp-forest-restoration'"),
+    },
+  },
+  async ({ practice_id }) => {
+    const corpus = loadCorpus();
+    const practices = corpus.filter(
+      (a) => a.frontmatter.type === "practice-guide" || a.path.includes("/practices/"),
+    );
+    const a = practices.find(
+      (x) =>
+        x.frontmatter.id === practice_id ||
+        x.path.endsWith(`${practice_id}.md`) ||
+        matchesQuery(x, practice_id),
+    );
+    if (!a) {
+      const available = practices.map((p) => p.frontmatter.id ?? p.path.split("/").pop());
+      return text(envelope(null, undefined, { found: false, practice_id, available }));
+    }
+    const verdict = assertServable(a.frontmatter);
+    if (!verdict.servable)
+      return text(
+        envelope({ id: a.frontmatter.id, title: a.frontmatter.title }, a.frontmatter, {
+          servable: false,
+          refused: verdict.reason,
+        }),
+      );
+    return text(envelope({ ...a.frontmatter, body: a.body }, a.frontmatter, { servable: true }));
+  },
+);
+
+/* ---- Wisdom Library (BLC content/wisdom/) ---- */
+server.registerTool(
+  "get_wisdom_article",
+  {
+    title: "Get ocean wisdom article",
+    description:
+      "Retrieve a curated ocean wisdom article from the commons (ocean-climate-connection, ocean-acidification, 30x30 goal, indigenous stewardship, noise pollution, deep-sea mining, five key metrics). Review-gated.",
+    inputSchema: {
+      article_id: z
+        .string()
+        .optional()
+        .describe("Artifact id or keyword, e.g. 'ocean-climate-connection' or 'acidification'"),
+    },
+  },
+  async ({ article_id }) => {
+    const corpus = loadCorpus();
+    const wisdom = corpus.filter(
+      (a) => a.frontmatter.type === "wisdom" || a.path.includes("/wisdom/"),
+    );
+    if (!article_id) {
+      return text(
+        envelope(
+          wisdom.map((a) => ({
+            id: a.frontmatter.id,
+            title: a.frontmatter.title,
+            status: a.frontmatter.status,
+            servable: assertServable(a.frontmatter).servable,
+          })),
+          undefined,
+          { count: wisdom.length },
+        ),
+      );
+    }
+    const a = wisdom.find(
+      (x) =>
+        x.frontmatter.id === article_id ||
+        x.path.endsWith(`${article_id}.md`) ||
+        matchesQuery(x, article_id),
+    );
+    if (!a) {
+      const available = wisdom.map((w) => w.frontmatter.id ?? w.path.split("/").pop());
+      return text(envelope(null, undefined, { found: false, article_id, available }));
+    }
+    const verdict = assertServable(a.frontmatter);
+    if (!verdict.servable)
+      return text(
+        envelope({ id: a.frontmatter.id, title: a.frontmatter.title }, a.frontmatter, {
+          servable: false,
+          refused: verdict.reason,
+        }),
+      );
+    return text(envelope({ ...a.frontmatter, body: a.body }, a.frontmatter, { servable: true }));
+  },
+);
+
+/* ---- Guardian Query (OIS REST gateway passthrough) ---- */
+server.registerTool(
+  "guardian_query",
+  {
+    title: "Query Guardian instances",
+    description:
+      "Query live Ocean Guardian instances through the OIS REST gateway. Returns guardian status, last-run briefings, and active signal counts. Requires OIS_GATEWAY_URL pointing to a running ocean-intelligence-system gateway (default: http://localhost:3000).",
+    inputSchema: {
+      guardian_id: z
+        .string()
+        .optional()
+        .describe(
+          "Guardian instance id (e.g. 'gbr-reef-guardian'). Omit to list all active guardians.",
+        ),
+      include_briefing: z
+        .boolean()
+        .optional()
+        .describe("Include last generated briefing text in the response (default: false)."),
+    },
+  },
+  async ({ guardian_id, include_briefing }) => {
+    const base = (process.env.OIS_GATEWAY_URL ?? "http://localhost:3000").replace(/\/$/, "");
+    const path = guardian_id ? `/guardians/${encodeURIComponent(guardian_id)}` : "/guardians";
+    const url = `${base}${path}`;
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "marine-mcp/0.1 (Ocean Intelligence System)" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) throw new Error(`OIS gateway HTTP ${res.status} ${res.statusText}`);
+      const json = await res.json();
+      const data = include_briefing ? json : stripBriefingBodies(json);
+      return text({
+        data,
+        source: `OIS REST gateway (${url})`,
+        unreviewed: false,
+        note: "Guardian briefings are derived from reviewed BLC commons artifacts + live connector signals.",
+      });
+    } catch (e) {
+      const err = e as Error;
+      return text({
+        data: null,
+        source: `OIS REST gateway (${url})`,
+        error: err.message,
+        hint: "Is the OIS gateway running? Set OIS_GATEWAY_URL=https://your-deployed-ois to reach a remote instance.",
+      });
+    }
+  },
+);
+
+/** Strip large briefing body text when include_briefing is false. */
+function stripBriefingBodies(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(stripBriefingBodies);
+  if (obj !== null && typeof obj === "object") {
+    const o = obj as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(o)) {
+      out[k] = k === "briefing_body" || k === "full_briefing" ? "[use include_briefing:true to retrieve]" : stripBriefingBodies(v);
+    }
+    return out;
+  }
+  return obj;
+}
+
 async function main() {
   // Fail fast with a clear message if the corpus path is misconfigured.
   resolveCorpusRoot();
