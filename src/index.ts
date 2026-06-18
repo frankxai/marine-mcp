@@ -272,7 +272,7 @@ server.registerTool(
         matchesQuery(x, practice_id),
     );
     if (!a) {
-      const available = practices.map((p) => p.frontmatter.id ?? p.path.split("/").pop());
+      const available = practices.map((p) => p.frontmatter.id);
       return text(envelope(null, undefined, { found: false, practice_id, available }));
     }
     const verdict = assertServable(a.frontmatter);
@@ -327,7 +327,7 @@ server.registerTool(
         matchesQuery(x, article_id),
     );
     if (!a) {
-      const available = wisdom.map((w) => w.frontmatter.id ?? w.path.split("/").pop());
+      const available = wisdom.map((w) => w.frontmatter.id);
       return text(envelope(null, undefined, { found: false, article_id, available }));
     }
     const verdict = assertServable(a.frontmatter);
@@ -381,11 +381,11 @@ server.registerTool(
         note: "Guardian briefings are derived from reviewed BLC commons artifacts + live connector signals.",
       });
     } catch (e) {
-      const err = e as Error;
+      const errorMessage = e instanceof Error ? e.message : String(e);
       return text({
         data: null,
         source: `OIS REST gateway (${url})`,
-        error: err.message,
+        error: errorMessage,
         hint: "Is the OIS gateway running? Set OIS_GATEWAY_URL=https://your-deployed-ois to reach a remote instance.",
       });
     }
