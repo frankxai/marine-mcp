@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assertServable, splitFrontmatter, envelope, type ArtifactFrontmatter } from "../src/corpus.js";
+import {
+  assertServable,
+  splitFrontmatter,
+  envelope,
+  SPECIES_GROUPS,
+  type ArtifactFrontmatter,
+} from "../src/corpus.js";
 
 const base: ArtifactFrontmatter = {
   id: "x",
@@ -62,4 +68,31 @@ test("envelope always carries sources + attribution", () => {
   assert.equal(e.sources.length, 1);
   assert.match(e.attribution, /Blue Life Commons/);
   assert.equal(e.status, "needs-expert-review");
+});
+
+test("welfare and clinical types need review.science=approved, matching the commons lint", () => {
+  for (const type of [
+    "welfare-assessment",
+    "stranding-protocol",
+    "release-criteria",
+    "husbandry-guide",
+    "necropsy-summary",
+  ]) {
+    const v = assertServable({ ...base, type, status: "approved" }, {} as NodeJS.ProcessEnv);
+    assert.equal(v.servable, false, type);
+    assert.match(v.reason, /review\.science/, type);
+  }
+});
+
+test("override verdict is marked so responses can flag unreviewed content", () => {
+  const v = assertServable(base, { BLC_ALLOW_UNREVIEWED: "true" } as unknown as NodeJS.ProcessEnv);
+  assert.equal(v.override, true);
+  assert.equal(assertServable({ ...base, status: "approved", review: { science: "approved" } }, {} as NodeJS.ProcessEnv).override, undefined);
+});
+
+test("species group filter covers every guild in the commons artifact schema", () => {
+  assert.deepEqual(
+    [...SPECIES_GROUPS].sort(),
+    ["cetaceans", "marine-reptiles", "pinnipeds", "reefs", "sharks-rays", "sirenians", "turtles"],
+  );
 });
