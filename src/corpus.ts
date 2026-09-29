@@ -22,7 +22,23 @@ export const SCIENCE_SENSITIVE_TYPES = new Set([
   "dataset-card",
   "observation-guide",
   "field-mission",
+  "welfare-assessment",
+  "stranding-protocol",
+  "release-criteria",
+  "husbandry-guide",
+  "necropsy-summary",
 ]);
+
+/** Guild slugs allowed by blue-life-commons/schema/artifact-schema.yaml. */
+export const SPECIES_GROUPS = [
+  "cetaceans",
+  "pinnipeds",
+  "turtles",
+  "sharks-rays",
+  "reefs",
+  "sirenians",
+  "marine-reptiles",
+] as const;
 
 /** Statuses considered "review-complete" enough to serve a body as fact. */
 const SERVABLE_STATUSES = new Set(["approved", "published"]);
@@ -59,6 +75,8 @@ export interface ServableVerdict {
   servable: boolean;
   status: string;
   reason: string;
+  /** True when BLC_ALLOW_UNREVIEWED made an unreviewed artifact servable. */
+  override?: true;
 }
 
 const ATTRIBUTION =
@@ -146,7 +164,7 @@ export function assertServable(
   const allowUnreviewed = env.BLC_ALLOW_UNREVIEWED === "true";
 
   if (allowUnreviewed) {
-    return { servable: true, status, reason: "BLC_ALLOW_UNREVIEWED override (local preview)" };
+    return { servable: true, status, reason: "BLC_ALLOW_UNREVIEWED override (local preview)", override: true };
   }
   if (!SERVABLE_STATUSES.has(status)) {
     return {
@@ -163,6 +181,13 @@ export function assertServable(
     };
   }
   return { servable: true, status, reason: "approved" };
+}
+
+/** Extra response fields for a servable verdict; flags content served only because of the override. */
+export function servedExtra(verdict: ServableVerdict): Record<string, unknown> {
+  return verdict.override
+    ? { servable: true, unreviewed: true, warning: verdict.reason }
+    : { servable: true };
 }
 
 /** Standard envelope. EVERY tool response carries sources + attribution + status. */
