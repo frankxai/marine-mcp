@@ -90,6 +90,16 @@ test("override verdict is marked so responses can flag unreviewed content", () =
   assert.equal(assertServable({ ...base, status: "approved", review: { science: "approved" } }, {} as NodeJS.ProcessEnv).override, undefined);
 });
 
+test("the override does not label an already-servable artifact as unreviewed", () => {
+  const env = { BLC_ALLOW_UNREVIEWED: "true" } as unknown as NodeJS.ProcessEnv;
+  const reviewed = assertServable({ ...base, status: "approved", review: { science: "approved" } }, env);
+  assert.equal(reviewed.servable, true);
+  assert.equal(reviewed.override, undefined);
+  assert.equal(reviewed.reason, "approved");
+  const sensitive = assertServable({ ...base, type: "welfare-assessment", status: "approved" }, env);
+  assert.equal(sensitive.override, true);
+});
+
 test("species group filter covers every guild in the commons artifact schema", () => {
   assert.deepEqual(
     [...SPECIES_GROUPS].sort(),

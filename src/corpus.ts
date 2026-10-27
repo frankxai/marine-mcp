@@ -161,24 +161,30 @@ export function assertServable(
   env: NodeJS.ProcessEnv = process.env,
 ): ServableVerdict {
   const status = fm.status ?? "unknown";
-  const allowUnreviewed = env.BLC_ALLOW_UNREVIEWED === "true";
+  // The override only applies where the normal gate would refuse, so reviewed
+  // artifacts are never labelled unreviewed.
+  const overridden: ServableVerdict | null =
+    env.BLC_ALLOW_UNREVIEWED === "true"
+      ? { servable: true, status, reason: "BLC_ALLOW_UNREVIEWED override (local preview)", override: true }
+      : null;
 
-  if (allowUnreviewed) {
-    return { servable: true, status, reason: "BLC_ALLOW_UNREVIEWED override (local preview)", override: true };
-  }
   if (!SERVABLE_STATUSES.has(status)) {
-    return {
-      servable: false,
-      status,
-      reason: `Artifact status is "${status}". The Ocean Intelligence System serves only review-approved or published content as fact.`,
-    };
+    return (
+      overridden ?? {
+        servable: false,
+        status,
+        reason: `Artifact status is "${status}". The Ocean Intelligence System serves only review-approved or published content as fact.`,
+      }
+    );
   }
   if (SCIENCE_SENSITIVE_TYPES.has(fm.type) && fm.review?.science !== "approved") {
-    return {
-      servable: false,
-      status,
-      reason: `Science-sensitive type "${fm.type}" requires review.science=approved (currently "${fm.review?.science ?? "pending"}").`,
-    };
+    return (
+      overridden ?? {
+        servable: false,
+        status,
+        reason: `Science-sensitive type "${fm.type}" requires review.science=approved (currently "${fm.review?.science ?? "pending"}").`,
+      }
+    );
   }
   return { servable: true, status, reason: "approved" };
 }
