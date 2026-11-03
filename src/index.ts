@@ -18,6 +18,8 @@ import {
   loadCorpus,
   assertServable,
   envelope,
+  servedExtra,
+  SPECIES_GROUPS,
   resolveCorpusRoot,
   type Artifact,
 } from "./corpus.js";
@@ -54,9 +56,7 @@ server.registerTool(
       "Discover species pages in the commons. Returns metadata (id, title, status, review state) — NOT factual claims. Use get_species_details to retrieve a reviewed body.",
     inputSchema: {
       query: z.string().optional().describe("Free text: common/scientific name, region, or guild"),
-      species_group: z
-        .enum(["cetaceans", "pinnipeds", "turtles", "sharks-rays", "reefs"])
-        .optional(),
+      species_group: z.enum(SPECIES_GROUPS).optional(),
     },
   },
   async ({ query, species_group }) => {
@@ -104,9 +104,7 @@ server.registerTool(
         }),
       );
     }
-    return text(
-      envelope({ ...a.frontmatter, body: a.body }, a.frontmatter, { servable: true }),
-    );
+    return text(envelope({ ...a.frontmatter, body: a.body }, a.frontmatter, servedExtra(verdict)));
   },
 );
 
@@ -126,7 +124,7 @@ server.registerTool(
     const verdict = assertServable(a.frontmatter);
     if (!verdict.servable)
       return text(envelope({ id: a.frontmatter.id }, a.frontmatter, { servable: false, refused: verdict.reason }));
-    return text(envelope({ ...a.frontmatter, body: a.body }, a.frontmatter, { servable: true }));
+    return text(envelope({ ...a.frontmatter, body: a.body }, a.frontmatter, servedExtra(verdict)));
   },
 );
 

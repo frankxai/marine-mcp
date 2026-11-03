@@ -22,7 +22,23 @@ export const SCIENCE_SENSITIVE_TYPES = new Set([
   "dataset-card",
   "observation-guide",
   "field-mission",
+  "welfare-assessment",
+  "stranding-protocol",
+  "release-criteria",
+  "husbandry-guide",
+  "necropsy-summary",
 ]);
+
+/** Guild slugs allowed by blue-life-commons/schema/artifact-schema.yaml. */
+export const SPECIES_GROUPS = [
+  "cetaceans",
+  "pinnipeds",
+  "turtles",
+  "sharks-rays",
+  "reefs",
+  "sirenians",
+  "marine-reptiles",
+] as const;
 
 /** Statuses considered "review-complete" enough to serve a body as fact. */
 const SERVABLE_STATUSES = new Set(["approved", "published"]);
@@ -59,6 +75,8 @@ export interface ServableVerdict {
   servable: boolean;
   status: string;
   reason: string;
+  /** True when BLC_ALLOW_UNREVIEWED made an unreviewed artifact servable. */
+  override?: true;
 }
 
 const ATTRIBUTION =
@@ -143,26 +161,39 @@ export function assertServable(
   env: NodeJS.ProcessEnv = process.env,
 ): ServableVerdict {
   const status = fm.status ?? "unknown";
-  const allowUnreviewed = env.BLC_ALLOW_UNREVIEWED === "true";
+  // The override only applies where the normal gate would refuse, so reviewed
+  // artifacts are never labelled unreviewed.
+  const overridden: ServableVerdict | null =
+    env.BLC_ALLOW_UNREVIEWED === "true"
+      ? { servable: true, status, reason: "BLC_ALLOW_UNREVIEWED override (local preview)", override: true }
+      : null;
 
-  if (allowUnreviewed) {
-    return { servable: true, status, reason: "BLC_ALLOW_UNREVIEWED override (local preview)" };
-  }
   if (!SERVABLE_STATUSES.has(status)) {
-    return {
-      servable: false,
-      status,
-      reason: `Artifact status is "${status}". The Ocean Intelligence System serves only review-approved or published content as fact.`,
-    };
+    return (
+      overridden ?? {
+        servable: false,
+        status,
+        reason: `Artifact status is "${status}". The Ocean Intelligence System serves only review-approved or published content as fact.`,
+      }
+    );
   }
   if (SCIENCE_SENSITIVE_TYPES.has(fm.type) && fm.review?.science !== "approved") {
-    return {
-      servable: false,
-      status,
-      reason: `Science-sensitive type "${fm.type}" requires review.science=approved (currently "${fm.review?.science ?? "pending"}").`,
-    };
+    return (
+      overridden ?? {
+        servable: false,
+        status,
+        reason: `Science-sensitive type "${fm.type}" requires review.science=approved (currently "${fm.review?.science ?? "pending"}").`,
+      }
+    );
   }
   return { servable: true, status, reason: "approved" };
+}
+
+/** Extra response fields for a servable verdict; flags content served only because of the override. */
+export function servedExtra(verdict: ServableVerdict): Record<string, unknown> {
+  return verdict.override
+    ? { servable: true, unreviewed: true, warning: verdict.reason }
+    : { servable: true };
 }
 
 /** Standard envelope. EVERY tool response carries sources + attribution + status. */
